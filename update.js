@@ -120,7 +120,7 @@ async function fetchLatest(repo) {
       if (json.version) {
         return {
           version: json.version,
-          url: home,
+          url: `${home}/archive/refs/heads/main.zip`,
           name: 'manifest.json',
           publishedAt: null,
           source: 'manifest'
