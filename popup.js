@@ -29,6 +29,22 @@ const FIELDS = {
 };
 
 const $ = (id) => document.getElementById(id);
+
+// ------------------------------------------------------------ 테마
+// popup.html <head> 인라인 스크립트가 깜빡임 없이 초기 테마를 이미 세팅해 둔다.
+function applyTheme(theme) {
+  document.documentElement.dataset.theme = theme;
+  $('theme-toggle').textContent = theme === 'light' ? '🌙' : '☀️';
+}
+
+applyTheme(document.documentElement.dataset.theme);
+
+$('theme-toggle').addEventListener('click', () => {
+  const next = document.documentElement.dataset.theme === 'light' ? 'dark' : 'light';
+  localStorage.setItem('rc-theme', next);
+  applyTheme(next);
+});
+
 const el = {
   ready: $('ready'),
   notice: $('notice'),

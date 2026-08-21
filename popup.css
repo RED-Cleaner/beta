@@ -1,4 +1,5 @@
-:root {
+:root,
+:root[data-theme="dark"] {
   --bg: #0c0d0f;
   --field: #17191c;
   --field-hi: #202329;
@@ -8,6 +9,20 @@
   --accent: #e0245e;
   --ok: #3ecf74;
   --warn: #e8a33d;
+  --log-bg: #000;
+}
+
+:root[data-theme="light"] {
+  --bg: #f4f5f7;
+  --field: #ffffff;
+  --field-hi: #e7e9ec;
+  --line: #d8dbe0;
+  --text: #1b1c1e;
+  --muted: #6b7178;
+  --accent: #e0245e;
+  --ok: #1f9d55;
+  --warn: #a86a08;
+  --log-bg: #17191c;
 }
 
 * {
@@ -22,8 +37,8 @@ body {
 }
 
 body {
-  width: 380px;
-  max-height: 600px;
+  width: 460px;
+  max-height: 680px;
   display: flex;
   flex-direction: column;
   background: var(--bg);
@@ -31,6 +46,32 @@ body {
   font-family: "Segoe UI", "Nanum Gothic", "Malgun Gothic", system-ui, sans-serif;
   font-size: 13px;
   line-height: 1.45;
+  transition: background 0.15s ease, color 0.15s ease;
+}
+
+/* ---------------------------------------------------------- 스크롤바 */
+
+* {
+  scrollbar-width: thin;
+  scrollbar-color: var(--line) var(--bg);
+}
+
+*::-webkit-scrollbar {
+  width: 9px;
+  height: 9px;
+}
+
+*::-webkit-scrollbar-track {
+  background: var(--bg);
+}
+
+*::-webkit-scrollbar-thumb {
+  background: var(--line);
+  border: 2px solid var(--bg);
+}
+
+*::-webkit-scrollbar-thumb:hover {
+  background: var(--muted);
 }
 
 /* ------------------------------------------------------------- 헤더 */
@@ -64,6 +105,18 @@ body {
   background: var(--accent);
 }
 
+.head-acts {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.theme-toggle {
+  padding: 5px 7px;
+  font-size: 13px;
+  line-height: 1;
+}
+
 .badge {
   font-size: 11px;
   color: var(--muted);
@@ -83,7 +136,7 @@ body {
 .notice {
   padding: 9px 14px;
   font-size: 12px;
-  color: #ffc2d2;
+  color: var(--accent);
   background: rgba(224, 36, 94, 0.1);
   border-left: 3px solid var(--accent);
 }
@@ -282,7 +335,8 @@ input[type="checkbox"] {
   height: 14px;
   margin: 2px 0 0;
   flex: none;
-  background: #2c2f35;
+  background: var(--field-hi);
+  border: 1px solid var(--line);
   cursor: pointer;
   position: relative;
 }
@@ -398,7 +452,7 @@ input[type="checkbox"]:checked::after {
 .log {
   height: 132px;
   overflow-y: auto;
-  background: #000;
+  background: var(--log-bg);
   padding: 8px 9px;
   /* 로그는 고정폭. 한글은 나눔고딕코딩이 받는다. */
   font-family: ui-monospace, Consolas, "Nanum Gothic Coding", monospace;
@@ -425,11 +479,12 @@ input[type="checkbox"]:checked::after {
 }
 
 .log .k-start {
-  color: var(--ok);
+  /* 로그 배경은 테마와 무관하게 항상 어두워서 고정값을 쓴다 */
+  color: #3ecf74;
 }
 
 .log .k-cooldown {
-  color: var(--warn);
+  color: #e8a33d;
 }
 
 /* ------------------------------------------------------------- 버튼 */

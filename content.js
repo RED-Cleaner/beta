@@ -710,7 +710,13 @@
       // 예전 설정(범위 두 칸)이 저장돼 있으면 큰 쪽을 이어받는다.
       cooldownMinutes:
         Number(raw.cooldownMinutes) || Number(raw.cooldownMaxMinutes) || 5,
-      rateLimitMinutes: Number(raw.rateLimitMinutes) || 3,
+      // 요청 제한(429) 전용 대기 시간은 팝업에 별도 입력이 없다.
+      // 일반 휴식 시간(cooldownMinutes)과 같은 값을 쓴다.
+      rateLimitMinutes:
+        Number(raw.rateLimitMinutes) ||
+        Number(raw.cooldownMinutes) ||
+        Number(raw.cooldownMaxMinutes) ||
+        5,
       deleteDelayMs: Number(raw.deleteDelayMs) || 700,
       maxDeletions: num(raw.maxDeletions),
       dryRun: Boolean(raw.dryRun)

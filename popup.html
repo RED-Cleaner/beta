@@ -5,6 +5,7 @@
     <link rel="stylesheet" href="popup.css" />
     <link href="https://fonts.googleapis.com/css2?family=Nanum+Gothic+Coding:wght@400;700&family=Nanum+Gothic:wght@400;700;800&display=swap" rel="stylesheet">
     <title>RED Cleaner</title>
+    <script src="theme-init.js"></script>
   </head>
   <body>
     <header class="head">
@@ -12,7 +13,10 @@
         <span class="dot"></span>
         <h1>RED Cleaner</h1>
       </div>
-      <div id="ready" class="badge badge-wait">세션 확인 중…</div>
+      <div class="head-acts">
+        <button id="theme-toggle" class="mini ghost theme-toggle" aria-label="테마 전환" title="다크/라이트 전환"></button>
+        <div id="ready" class="badge badge-wait">세션 확인 중…</div>
+      </div>
     </header>
 
     <div id="notice" class="notice hidden"></div>
