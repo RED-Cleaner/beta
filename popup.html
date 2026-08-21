@@ -1,0 +1,189 @@
+<!doctype html>
+<html lang="ko">
+  <head>
+    <meta charset="utf-8" />
+    <link rel="stylesheet" href="popup.css" />
+    <link href="https://fonts.googleapis.com/css2?family=Nanum+Gothic+Coding:wght@400;700&family=Nanum+Gothic:wght@400;700;800&display=swap" rel="stylesheet">
+    <title>RED Cleaner</title>
+  </head>
+  <body>
+    <header class="head">
+      <div class="brand">
+        <span class="dot"></span>
+        <h1>RED Cleaner</h1>
+      </div>
+      <div id="ready" class="badge badge-wait">세션 확인 중…</div>
+    </header>
+
+    <div id="notice" class="notice hidden"></div>
+    <div id="tabs-row" class="tabs-row hidden">
+      <button id="open-all" class="mini">전체 트윗 열기</button>
+      <button id="open-replies" class="mini">답글 탭 열기</button>
+    </div>
+
+    <div id="captured" class="captured">
+      <span id="captured-text"></span>
+      <button id="captured-reset" class="mini ghost">다시 잡기</button>
+    </div>
+
+    <div id="update-banner" class="update hidden">
+      <div class="update-text">
+        <b id="update-title"></b>
+        <small id="update-sub"></small>
+      </div>
+      <div class="update-acts">
+        <button id="update-open" class="mini">받기</button>
+        <button id="update-hide" class="mini ghost">숨기기</button>
+      </div>
+    </div>
+
+    <main class="body">
+      <section class="card">
+        <h2>삭제 대상</h2>
+        <p class="hint">중복 선택 가능합니다.</p>
+        <div class="row-check">
+          <label class="chk"><input type="checkbox" id="t-tweets" /><span>게시물<br />(퍼블트)</span></label>
+          <label class="chk"><input type="checkbox" id="t-replies" /><span>답글</span></label>
+          <label class="chk"><input type="checkbox" id="t-retweets" /><span>리트윗</span></label>
+        </div>
+      </section>
+
+      <section class="card">
+        <h2>답글 세분화</h2>
+        <label class="line">
+          <input type="checkbox" id="mentionsOnly" />
+          <span>
+            <b>멘션만 삭제</b>
+            <small>답글·트윗 중 다른 계정을 언급한 것만 삭제합니다.</small>
+          </span>
+        </label>
+        <label class="line">
+          <input type="checkbox" id="keepThreads" />
+          <span>
+            <b>타래 유지</b>
+            <small>내가 나에게 이어쓴 답글(타래)은 삭제하지 않습니다.</small>
+          </span>
+        </label>
+      </section>
+
+      <section class="card">
+        <h2>삭제 제외 조건</h2>
+
+        <label class="line">
+          <input type="checkbox" id="keepPinned" />
+          <span><b>메인 트윗 제외</b><small>메인에 고정된 트윗은 삭제하지 않습니다.</small></span>
+        </label>
+
+        <label class="line">
+          <input type="checkbox" id="keepMedia" />
+          <span><b>미디어 제외</b><small>이미지·영상이 첨부된 트윗은 삭제하지 않습니다.</small></span>
+        </label>
+
+        <label class="line">
+          <input type="checkbox" id="keepFavorited" />
+          <span><b>내가 좋아요 누른 트윗 제외</b><small>내가 마음을 누른 트윗은 보존합니다.</small></span>
+        </label>
+
+        <div class="line line-num">
+          <label class="chk"><input type="checkbox" id="useMinLikes" /><span>좋아요 기준 제외</span></label>
+          <div class="num">
+            <input type="number" id="minLikes" min="1" value="10" />
+            <span>개 이상 보존</span>
+          </div>
+        </div>
+
+        <div class="line line-num">
+          <label class="chk"><input type="checkbox" id="useMinRetweets" /><span>리트윗 기준 제외</span></label>
+          <div class="num">
+            <input type="number" id="minRetweets" min="1" value="10" />
+            <span>개 이상 보존</span>
+          </div>
+        </div>
+
+        <div class="field">
+          <label for="excludeKeywords">키워드 포함 제외</label>
+          <input type="text" id="excludeKeywords" placeholder="예) 공지, 딸기, 고정" />
+          <small>쉼표로 구분해 여러 개 입력할 수 있습니다.</small>
+        </div>
+
+        <div class="field">
+          <label for="excludeIds">지정 트윗 제외</label>
+          <textarea id="excludeIds" rows="2" placeholder="트윗 링크 또는 ID (쉼표 구분)"></textarea>
+          <small>https://x.com/계정/status/<b>숫자</b> 의 숫자 부분 또는 링크 전체를 붙여넣으세요.</small>
+        </div>
+      </section>
+
+      <section class="card">
+        <h2>기간 (선택)</h2>
+        <div class="row-date">
+          <label>이후 <input type="date" id="afterDate" /></label>
+          <label>이전 <input type="date" id="beforeDate" /></label>
+        </div>
+        <small class="hint">비워두면 전체 기간이 대상입니다.</small>
+      </section>
+
+      <section class="card">
+        <h2>속도 조정 · 리밋 회피</h2>
+        <small class="hint">리밋 방지를 위해 작은 숫자로 변경하는 것을 권고하지 않습니다.</small>
+        <div class="line line-num">
+          <span>배치 크기</span>
+          <div class="num"><input type="number" id="batchSize" min="1" value="300" /><span>개마다 휴식</span></div>
+        </div>
+        <div class="line line-num">
+          <span>휴식 시간</span>
+          <div class="num"><input type="number" id="cooldownMinutes" min="1" step="0.5" value="5" /><span>분</span></div>
+        </div>
+        <div class="line line-num">
+          <span>삭제 간격</span>
+          <div class="num"><input type="number" id="deleteDelayMs" min="0" step="50" value="700" /><span>ms</span></div>
+        </div>
+        <div class="line line-num">
+          <span>총 삭제 상한</span>
+          <div class="num"><input type="number" id="maxDeletions" min="0" placeholder="무제한" /><span>개</span></div>
+        </div>
+      </section>
+
+      <section class="card">
+        
+        <label class="line">
+          <input type="checkbox" id="dryRun" />
+          <span><b>미리보기 모드</b><small>실제로 지우지 않고 어떤 트윗이 대상인지 로그로만 확인합니다.</small></span>
+        </label>
+        <div class="log-head">
+          <h2>로그</h2>
+          <span id="phase" class="phase">대기 중</span>
+        </div>
+        <div class="stats">
+          <div><span id="s-scanned">0</span><small>검사</small></div>
+          <div><span id="s-deleted">0</span><small>처리</small></div>
+          <div><span id="s-skipped">0</span><small>보존</small></div>
+          <div><span id="s-failed">0</span><small>실패</small></div>
+        </div>
+        <div id="log" class="log"></div>
+      </section>
+
+      <section class="card">
+        <h2>버전 확인</h2>
+        <div class="field">
+          <label for="repo">GitHub 저장소</label>
+          <div class="repo-row">
+            <input type="text" id="repo" placeholder="사용자명/저장소명" />
+            <button id="repo-save" class="mini">저장</button>
+          </div>
+          <small id="update-info">확인 중…</small>
+        </div>
+        <div class="update-actions">
+          <button id="update-check" class="mini ghost">지금 확인</button>
+          <button id="repo-open" class="mini ghost">저장소 열기</button>
+        </div>
+      </section>
+    </main>
+
+    <footer class="foot">
+      <button id="stop" class="btn btn-ghost" disabled>중지</button>
+      <button id="start" class="btn btn-danger">삭제 시작</button>
+    </footer>
+
+    <script src="popup.js"></script>
+  </body>
+</html>

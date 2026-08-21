@@ -1,0 +1,46 @@
+{
+  "manifest_version": 3,
+  "name": "RED Cleaner",
+  "version": "1.0.0",
+  "description": "트위터(X) 청소기",
+  "homepage_url": "https://github.com/RED-Cleaner/beta",
+  "permissions": ["storage", "webRequest", "tabs", "alarms"],
+  "host_permissions": [
+    "*://*.x.com/*",
+    "*://*.twitter.com/*",
+    "https://abs.twimg.com/*",
+    "https://api.github.com/*"
+  ],
+  "background": {
+    "service_worker": "background.js"
+  },
+  "content_scripts": [
+    {
+      "matches": ["*://*.x.com/*", "*://*.twitter.com/*"],
+      "js": ["inject.js"],
+      "run_at": "document_start",
+      "world": "MAIN",
+      "all_frames": false
+    },
+    {
+      "matches": ["*://*.x.com/*", "*://*.twitter.com/*"],
+      "js": ["content.js"],
+      "run_at": "document_start",
+      "all_frames": false
+    }
+  ],
+  "action": {
+    "default_popup": "popup.html",
+    "default_title": "RED Cleaner",
+    "default_icon": {
+      "16": "icons/icon16.png",
+      "48": "icons/icon48.png",
+      "128": "icons/icon128.png"
+    }
+  },
+  "icons": {
+    "16": "icons/icon16.png",
+    "48": "icons/icon48.png",
+    "128": "icons/icon128.png"
+  }
+}
