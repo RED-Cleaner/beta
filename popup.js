@@ -354,7 +354,7 @@ async function detectTab() {
       both
         ? ''
         : `아직 ${ready.hasTweetsTab ? '답글 탭' : '트윗 탭 → 전체'} 을(를) 못 잡았습니다. ` +
-            '그 탭을 한 번 열면 그쪽도 정리 대상이 됩니다.'
+            '활성화된 탭만 삭제가 진행됩니다.'
     );
     el.captured.textContent = '잡은 타임라인: ' + ready.timelines.map((t) => t.label).join(', ');
     $('captured').classList.remove('hidden');
@@ -396,7 +396,7 @@ el.start.addEventListener('click', async () => {
     const first = confirm(
       `⚠️ 삭제를 시작합니다\n\n` +
         `대상: ${targets}\n` +
-        `한 번 지운 트윗은 복구할 수 없습니다.\n\n` + `(삭제 전 미리보기 모드 지원)`
+        `한 번 지운 트윗은 복구할 수 없습니다.\n\n` + `(미리보기 모드로 대상 트윗만 확인할 수 있습니다.)`
     );
     if (!first) return;
   }
