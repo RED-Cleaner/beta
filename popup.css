@@ -345,16 +345,6 @@ input[type="checkbox"]:checked::after {
   min-width: 0;
 }
 
-.repo-row {
-  display: flex;
-  gap: 6px;
-}
-
-.repo-row input {
-  flex: 1;
-  min-width: 0;
-}
-
 .update-actions {
   display: flex;
   gap: 6px;

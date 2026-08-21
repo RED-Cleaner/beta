@@ -190,6 +190,7 @@ function sendToBg(message) {
   });
 }
 
+const REPO = 'RED-Cleaner/beta'; // 고정. 변경 불가
 let updateInfo = null;
 
 function renderUpdate(info) {
@@ -202,8 +203,6 @@ function renderUpdate(info) {
     banner.classList.add('hidden');
     return;
   }
-
-  $('repo').value = info.repo;
 
   const when = info.lastCheck
     ? new Date(info.lastCheck).toLocaleString('ko-KR', { dateStyle: 'short', timeStyle: 'short' })
@@ -255,18 +254,20 @@ $('update-open').addEventListener('click', () => {
   if (updateInfo && updateInfo.latest) chrome.tabs.create({ url: updateInfo.latest.url });
 });
 
-$('repo-open').addEventListener('click', () => {
-  const repo = $('repo').value.trim();
-  if (repo) chrome.tabs.create({ url: `https://github.com/${repo}` });
-});
-
+// 저장소는 고정이라 바꿀 값은 없다. 현재 설정을 storage 에 확정 저장만 한다.
 $('repo-save').addEventListener('click', async () => {
-  const res = await sendToBg({ type: 'rc-update-set-repo', repo: $('repo').value });
+  const res = await sendToBg({ type: 'rc-update-save' });
   if (!res || !res.ok) {
-    $('update-info').textContent = (res && res.error) || '저장소를 설정하지 못했습니다.';
+    $('update-info').textContent = '저장하지 못했습니다.';
     return;
   }
   renderUpdate(res.info);
+  showNotice(`저장했습니다. (${res.info.repo})`);
+});
+
+$('repo-open').addEventListener('click', () => {
+  const repo = (updateInfo && updateInfo.repo) || REPO;
+  chrome.tabs.create({ url: `https://github.com/${repo}` });
 });
 
 // ------------------------------------------------------------ 초기화

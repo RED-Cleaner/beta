@@ -4,12 +4,12 @@
  * 압축해제 확장은 스토어처럼 자동 설치가 안 되므로,
  * 최신 버전을 감지해서 배지·배너로 알리고 릴리스 페이지로 안내한다.
  *
- * 확인 순서: releases/latest → tags → 기본 브랜치의 manifest.json
+ * 확인 순서: releases/latest 리다이렉트 → tags.atom → raw manifest.json (GitHub API 미사용)
  */
 
 const UPDATE_KEY = 'redcleaner.update';
 const DEFAULT_REPO = 'RED-Cleaner/beta';
-const CHECK_INTERVAL_MINUTES = 360; // 6시간
+const CHECK_INTERVAL_MINUTES = 1440; // 24시간
 
 function parseVersion(v) {
   return String(v || '')
@@ -38,15 +38,13 @@ async function getUpdateState() {
   const got = await chrome.storage.local.get(UPDATE_KEY);
   const saved = got[UPDATE_KEY] || {};
   return {
-    repo: DEFAULT_REPO,
-    repoSetByUser: false,
     lastCheck: 0,
     lastError: null,
     latest: null, // { version, url, name, publishedAt, source }
     dismissed: null,
     ...saved,
-    // 사용자가 직접 지정한 적이 없으면 항상 최신 기본값을 쓴다.
-    repo: saved.repoSetByUser && saved.repo ? saved.repo : DEFAULT_REPO
+    // 저장소는 고정이다. 사용자가 바꿀 수 없다.
+    repo: DEFAULT_REPO
   };
 }
 
@@ -57,63 +55,73 @@ async function setUpdateState(patch) {
   return next;
 }
 
-async function ghJson(url) {
-  const res = await fetch(url, {
-    headers: { accept: 'application/vnd.github+json' },
-    cache: 'no-store'
-  });
+/** 리다이렉트를 따라간 최종 주소와 본문을 준다. 없으면 null */
+async function ghFetch(url) {
+  const res = await fetch(url, { cache: 'no-store', redirect: 'follow' });
   if (res.status === 404) return null;
-  if (res.status === 403) throw new Error('GitHub API 요청 한도에 걸렸습니다. 잠시 후 다시 시도하세요.');
+  if (res.status === 429) throw new Error('요청이 너무 잦습니다. 잠시 후 다시 시도하세요.');
   if (!res.ok) throw new Error(`GitHub 응답 오류 (HTTP ${res.status})`);
-  return res.json();
+  return { url: res.url, text: await res.text() };
 }
 
-/** 저장소에서 최신 버전 정보를 찾는다. 못 찾으면 null */
+/**
+ * 저장소에서 최신 버전 정보를 찾는다. 못 찾으면 null.
+ *   1) /releases/latest 리다이렉트 주소에서 태그 읽기
+ *   2) /tags.atom 피드
+ *   3) raw.githubusercontent.com 의 manifest.json
+ */
 async function fetchLatest(repo) {
-  const base = `https://api.github.com/repos/${repo}`;
+  const home = `https://github.com/${repo}`;
+  let repoExists = false;
 
-  // 1) 정식 릴리스
-  const release = await ghJson(`${base}/releases/latest`);
-  if (release && release.tag_name) {
-    return {
-      version: release.tag_name,
-      url: release.html_url,
-      name: release.name || release.tag_name,
-      publishedAt: release.published_at || null,
-      source: 'release'
-    };
+  // 1) /releases/latest 는 최신 릴리스 태그 페이지로 리다이렉트된다.
+  const latestPage = await ghFetch(`${home}/releases/latest`);
+  if (latestPage) {
+    repoExists = true;
+    const m = latestPage.url.match(/\/releases\/tag\/([^/?#]+)/);
+    if (m) {
+      const version = decodeURIComponent(m[1]);
+      const title = (latestPage.text.match(/<title>([^<]*)<\/title>/i) || [])[1] || '';
+      return {
+        version,
+        url: latestPage.url,
+        name: title.split('·')[0].trim() || version,
+        publishedAt: (latestPage.text.match(/datetime="([^"]+)"/) || [])[1] || null,
+        source: 'release'
+      };
+    }
   }
 
-  // 2) 태그
-  const tags = await ghJson(`${base}/tags?per_page=20`);
-  if (Array.isArray(tags) && tags.length > 0) {
-    const newest = tags
-      .filter((t) => parseVersion(t.name).length > 0)
-      .sort((a, b) => compareVersions(b.name, a.name))[0];
+  // 2) 태그 피드 (릴리스를 안 만들고 태그만 찍는 경우)
+  const tagsFeed = await ghFetch(`${home}/tags.atom`);
+  if (tagsFeed) {
+    repoExists = true;
+    const names = [...tagsFeed.text.matchAll(/<title>([^<]+)<\/title>/g)]
+      .map((m) => m[1].trim())
+      .filter((n) => parseVersion(n).length > 0);
+    const newest = names.sort((a, b) => compareVersions(b, a))[0];
     if (newest) {
       return {
-        version: newest.name,
-        url: `https://github.com/${repo}/releases/tag/${encodeURIComponent(newest.name)}`,
-        name: newest.name,
+        version: newest,
+        url: `${home}/releases/tag/${encodeURIComponent(newest)}`,
+        name: newest,
         publishedAt: null,
         source: 'tag'
       };
     }
   }
 
-  // 3) 기본 브랜치의 manifest.json
-  const repoInfo = await ghJson(base);
-  if (!repoInfo) throw new Error(`저장소를 찾을 수 없습니다: ${repo}`);
-  const branch = repoInfo.default_branch || 'main';
-  const file = await ghJson(`${base}/contents/manifest.json?ref=${encodeURIComponent(branch)}`);
-  if (file && file.content) {
+  // 3) 기본 브랜치(HEAD)의 manifest.json
+  const raw = await ghFetch(`https://raw.githubusercontent.com/${repo}/HEAD/manifest.json`);
+  if (raw) {
+    repoExists = true;
     try {
-      const json = JSON.parse(atob(file.content.replace(/\n/g, '')));
+      const json = JSON.parse(raw.text);
       if (json.version) {
         return {
           version: json.version,
-          url: `https://github.com/${repo}`,
-          name: `${branch} 브랜치`,
+          url: home,
+          name: 'manifest.json',
           publishedAt: null,
           source: 'manifest'
         };
@@ -123,26 +131,8 @@ async function fetchLatest(repo) {
     }
   }
 
+  if (!repoExists) throw new Error(`저장소를 찾을 수 없습니다: ${repo}`);
   return null;
-}
-
-// 경로 정규화
-function normalizeRepo(input) {
-  const cleaned = String(input || '')
-    .trim()
-    .replace(/^git@github\.com:/i, '')
-    .replace(/^https?:\/\/(?:www\.)?(?:api\.|raw\.|codeload\.|gist\.)?github(?:usercontent)?\.com\//i, '')
-    .replace(/^repos\//i, '')
-    .replace(/[?#].*$/, '')
-    .replace(/^\/+/, '');
-
-  // 앞 두 세그먼트만 저장소를 가리킨다. (archive/refs/heads/main.zip 등은 버린다)
-  const parts = cleaned.split('/').filter(Boolean);
-  if (parts.length < 2) return '';
-  const owner = parts[0];
-  const name = parts[1].replace(/\.git$/i, '').replace(/\.zip$/i, '');
-  if (!/^[\w.-]+$/.test(owner) || !/^[\w.-]+$/.test(name)) return '';
-  return `${owner}/${name}`;
 }
 
 function currentVersion() {
@@ -246,22 +236,11 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     return true;
   }
 
-  if (message.type === 'rc-update-set-repo') {
-    const repo = normalizeRepo(message.repo);
-    if (!repo) {
-      sendResponse({ ok: false, error: '형식이 올바르지 않습니다. 예) 사용자명/저장소명' });
-      return false;
-    }
-    setUpdateState({
-      repo,
-      repoSetByUser: repo !== DEFAULT_REPO,
-      latest: null,
-      dismissed: null,
-      lastCheck: 0,
-      lastError: null
-    })
-      .then(() => checkForUpdate(true))
-      .then((info) => sendResponse({ ok: true, info }));
+  if (message.type === 'rc-update-save') {
+    // 저장소는 DEFAULT_REPO 로 고정. 현재 상태를 그대로 다시 기록한다.
+    setUpdateState({})
+      .then((s) => sendResponse({ ok: true, info: summarize(s) }))
+      .catch((err) => sendResponse({ ok: false, error: err.message }));
     return true;
   }
 
