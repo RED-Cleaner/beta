@@ -236,13 +236,5 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     return true;
   }
 
-  if (message.type === 'rc-update-save') {
-    // 저장소는 DEFAULT_REPO 로 고정. 현재 상태를 그대로 다시 기록한다.
-    setUpdateState({})
-      .then((s) => sendResponse({ ok: true, info: summarize(s) }))
-      .catch((err) => sendResponse({ ok: false, error: err.message }));
-    return true;
-  }
-
   return false;
 });

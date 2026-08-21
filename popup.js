@@ -254,15 +254,9 @@ $('update-open').addEventListener('click', () => {
   if (updateInfo && updateInfo.latest) chrome.tabs.create({ url: updateInfo.latest.url });
 });
 
-// 저장소는 고정이라 바꿀 값은 없다. 현재 설정을 storage 에 확정 저장만 한다.
-$('repo-save').addEventListener('click', async () => {
-  const res = await sendToBg({ type: 'rc-update-save' });
-  if (!res || !res.ok) {
-    $('update-info').textContent = '저장하지 못했습니다.';
-    return;
-  }
-  renderUpdate(res.info);
-  showNotice(`저장했습니다. (${res.info.repo})`);
+$('repo-save').addEventListener('click', () => {
+  const repo = (updateInfo && updateInfo.repo) || REPO;
+  chrome.tabs.create({ url: `https://github.com/${repo}/archive/refs/heads/main.zip` });
 });
 
 $('repo-open').addEventListener('click', () => {
