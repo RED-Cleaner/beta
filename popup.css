@@ -38,7 +38,7 @@ body {
 
 body {
   width: 460px;
-  max-height: 680px;
+  max-height: 780px;
   display: flex;
   flex-direction: column;
   background: var(--bg);
@@ -450,8 +450,7 @@ input[type="checkbox"]:checked::after {
 }
 
 .log {
-  height: 132px;
-  overflow-y: auto;
+  min-height: 132px;
   background: var(--log-bg);
   padding: 8px 9px;
   /* 로그는 고정폭. 한글은 나눔고딕코딩이 받는다. */

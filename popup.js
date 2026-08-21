@@ -50,6 +50,7 @@ const el = {
   notice: $('notice'),
   captured: $('captured-text'),
   phase: $('phase'),
+  body: document.querySelector('.body'),
   log: $('log'),
   start: $('start'),
   stop: $('stop'),
@@ -150,7 +151,15 @@ function updateStartLabel(running) {
   el.start.classList.toggle('btn-safe', dry);
 }
 
+// 로그는 이제 팝업 전체 스크롤(.body)에 얹혀서 그려진다 (스크롤바 이중 방지).
+// 사용자가 위쪽 로그를 읽는 중이면 새 줄이 와도 스크롤 위치를 건드리지 않는다.
+function isNearBottom(elm, threshold = 40) {
+  return elm.scrollHeight - elm.scrollTop - elm.clientHeight < threshold;
+}
+
 function appendLog(entries) {
+  const stick = isNearBottom(el.body);
+
   const frag = document.createDocumentFragment();
   for (const entry of entries) {
     const d = document.createElement('div');
@@ -162,7 +171,7 @@ function appendLog(entries) {
 
   // 화면에 남기는 줄 수도 제한한다.
   while (el.log.childElementCount > 300) el.log.removeChild(el.log.firstChild);
-  el.log.scrollTop = el.log.scrollHeight;
+  if (stick) el.body.scrollTop = el.body.scrollHeight;
 }
 
 function renderState(s) {
