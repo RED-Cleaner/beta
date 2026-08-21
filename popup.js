@@ -151,8 +151,6 @@ function updateStartLabel(running) {
   el.start.classList.toggle('btn-safe', dry);
 }
 
-// 로그는 이제 팝업 전체 스크롤(.body)에 얹혀서 그려진다 (스크롤바 이중 방지).
-// 사용자가 위쪽 로그를 읽는 중이면 새 줄이 와도 스크롤 위치를 건드리지 않는다.
 function isNearBottom(elm, threshold = 40) {
   return elm.scrollHeight - elm.scrollTop - elm.clientHeight < threshold;
 }
@@ -398,16 +396,9 @@ el.start.addEventListener('click', async () => {
     const first = confirm(
       `⚠️ 삭제를 시작합니다\n\n` +
         `대상: ${targets}\n` +
-        `한 번 지운 트윗은 X 에서도, 이 확장에서도 복구할 수 없습니다.\n\n` +
-        `조건을 확인하셨다면 [확인]을 누르세요.`
+        `한 번 지운 트윗은 복구할 수 없습니다.\n\n` + `(삭제 전 미리보기 모드 지원)`
     );
     if (!first) return;
-
-    const second = confirm(
-      `정말 삭제할까요?\n\n` +
-        `자신이 없다면 [취소]를 누르고 "미리보기 모드"로 먼저 돌려보세요.`
-    );
-    if (!second) return;
   }
 
   saveConfig();
