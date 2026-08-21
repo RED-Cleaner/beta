@@ -126,6 +126,25 @@ async function fetchLatest(repo) {
   return null;
 }
 
+// 경로 정규화
+function normalizeRepo(input) {
+  const cleaned = String(input || '')
+    .trim()
+    .replace(/^git@github\.com:/i, '')
+    .replace(/^https?:\/\/(?:www\.)?(?:api\.|raw\.|codeload\.|gist\.)?github(?:usercontent)?\.com\//i, '')
+    .replace(/^repos\//i, '')
+    .replace(/[?#].*$/, '')
+    .replace(/^\/+/, '');
+
+  // 앞 두 세그먼트만 저장소를 가리킨다. (archive/refs/heads/main.zip 등은 버린다)
+  const parts = cleaned.split('/').filter(Boolean);
+  if (parts.length < 2) return '';
+  const owner = parts[0];
+  const name = parts[1].replace(/\.git$/i, '').replace(/\.zip$/i, '');
+  if (!/^[\w.-]+$/.test(owner) || !/^[\w.-]+$/.test(name)) return '';
+  return `${owner}/${name}`;
+}
+
 function currentVersion() {
   return chrome.runtime.getManifest().version;
 }
@@ -228,13 +247,8 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   }
 
   if (message.type === 'rc-update-set-repo') {
-    const repo = String(message.repo || '')
-      .trim()
-      .replace(/^git@github\.com:/i, '')
-      .replace(/^https?:\/\/github\.com\//i, '')
-      .replace(/\.git$/i, '')
-      .replace(/\/+$/, '');
-    if (!/^[\w.-]+\/[\w.-]+$/.test(repo)) {
+    const repo = normalizeRepo(message.repo);
+    if (!repo) {
       sendResponse({ ok: false, error: '형식이 올바르지 않습니다. 예) 사용자명/저장소명' });
       return false;
     }
