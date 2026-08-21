@@ -38,7 +38,8 @@ body {
 
 body {
   width: 460px;
-  max-height: 780px;
+  height: 560px;
+  overflow: hidden;
   display: flex;
   flex-direction: column;
   background: var(--bg);
@@ -215,10 +216,10 @@ body {
 
 .body {
   flex: 1;
+  min-height: 0;
   overflow-y: auto;
 }
 
-/* 섹션 구분은 카드 사이 분할선 하나로만 한다. */
 .card {
   padding: 13px 14px 15px;
   border-bottom: 1px solid var(--line);
@@ -453,7 +454,6 @@ input[type="checkbox"]:checked::after {
   min-height: 132px;
   background: var(--log-bg);
   padding: 8px 9px;
-  /* 로그는 고정폭. 한글은 나눔고딕코딩이 받는다. */
   font-family: ui-monospace, Consolas, "Nanum Gothic Coding", monospace;
   font-size: 11px;
   line-height: 1.55;
@@ -478,7 +478,6 @@ input[type="checkbox"]:checked::after {
 }
 
 .log .k-start {
-  /* 로그 배경은 테마와 무관하게 항상 어두워서 고정값을 쓴다 */
   color: #3ecf74;
 }
 
@@ -545,7 +544,6 @@ input[type="checkbox"]:checked::after {
   background: #c11d4f;
 }
 
-/* 미리보기 모드에서는 위험해 보이지 않게 */
 .btn-safe {
   background: var(--field);
   color: var(--text);
