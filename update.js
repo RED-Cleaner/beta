@@ -9,7 +9,6 @@
 
 const UPDATE_KEY = 'redcleaner.update';
 const DEFAULT_REPO = 'RED-Cleaner/beta';
-const CHECK_INTERVAL_MINUTES = 1440; // 24시간
 
 function parseVersion(v) {
   return String(v || '')
@@ -20,7 +19,6 @@ function parseVersion(v) {
     .filter((n) => Number.isFinite(n));
 }
 
-/** a > b 면 1, 같으면 0, 작으면 -1 */
 function compareVersions(a, b) {
   const x = parseVersion(a);
   const y = parseVersion(b);
@@ -43,7 +41,6 @@ async function getUpdateState() {
     latest: null, // { version, url, name, publishedAt, source }
     dismissed: null,
     ...saved,
-    // 저장소는 고정이다. 사용자가 바꿀 수 없다.
     repo: DEFAULT_REPO
   };
 }
@@ -199,24 +196,6 @@ function summarize(state) {
   };
 }
 
-// ------------------------------------------------------------ 배선
-
-chrome.alarms.create('redcleaner-update-check', {
-  delayInMinutes: 1,
-  periodInMinutes: CHECK_INTERVAL_MINUTES
-});
-
-chrome.alarms.onAlarm.addListener((alarm) => {
-  if (alarm.name === 'redcleaner-update-check') checkForUpdate(false);
-});
-
-chrome.runtime.onInstalled.addListener(() => {
-  checkForUpdate(true);
-});
-
-chrome.runtime.onStartup.addListener(() => {
-  checkForUpdate(false);
-});
 
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   if (!message || !message.type) return false;

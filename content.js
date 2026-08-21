@@ -221,7 +221,11 @@
   const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
   async function interruptibleSleep(ms) {
-    const step = 250;
+    // 탭이 백그라운드에 5분 이상 있으면 Chrome 이 반복 타이머 깨우기를
+    // 분당 1회로 강제 조인다(Intensive Throttling). 짧은 간격으로 수백~수천 번
+    // 깨우면 그만큼 밀려서, 화면 카운트다운은 0:00인데 실제로는 한참 더 걸린다.
+    // 깨우는 횟수 자체를 최소화해서 영향을 줄인다.
+    const step = 15000;
     let left = ms;
     while (left > 0 && !state.stopRequested) {
       await sleep(Math.min(step, left));
