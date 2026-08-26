@@ -1,10 +1,5 @@
 /**
  * RED Cleaner - GitHub 업데이트 확인
- *
- * 압축해제 확장은 스토어처럼 자동 설치가 안 되므로,
- * 최신 버전을 감지해서 배지·배너로 알리고 릴리스 페이지로 안내한다.
- *
- * 확인 순서: releases/latest 리다이렉트 → tags.atom → raw manifest.json (GitHub API 미사용)
  */
 
 const UPDATE_KEY = 'redcleaner.update';

@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "RED Cleaner",
-  "version": "1.0.1",
+  "version": "1.0.2",
   "description": "트위터(X) 청소기",
   "homepage_url": "https://github.com/RED-Cleaner/beta",
   "permissions": ["storage", "webRequest", "tabs"],
