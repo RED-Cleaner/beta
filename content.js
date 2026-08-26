@@ -14,8 +14,8 @@
   function timelineLabel(kind, entry) {
     const path = (entry && entry.path) || '';
     if (kind === 'replies') return path ? `답글(${path})` : '답글';
-    const tab = /\/all\/?$/.test(path) ? '트윗-전체' : '트윗';
-    return path ? `${tab}(${path})` : tab;
+    if (kind === 'reposts') return path ? `재게시(${path})` : '재게시';
+    return path ? `게시물(${path})` : '게시물';
   }
 
   // ---------------------------------------------------- MAIN world 캡처
@@ -48,6 +48,10 @@
 
     // 우리가 보낸 요청은 다시 백그라운드로 올릴 필요 없음
     if (d.url && d.url.indexOf('__rc=1') !== -1) return;
+
+    // 어느 계정에서 잡은 캡처인지 같이 보낸다. 안 그러면 계정을 바꿔도
+    // 이전 계정에서 잡은 타임라인이 "잡혀있다"고 잘못 표시된다.
+    d.userId = getMyUserId();
 
     try {
       chrome.runtime.sendMessage({ type: 'rc-capture', data: d }, () => void chrome.runtime.lastError);
@@ -303,12 +307,17 @@
     });
 
     const bg = (res && res.captured) || {};
+    const byUser = bg.timelinesByUser || {};
+    const myId = getMyUserId();
+    // 계정을 모르고 잡은 것('*')을 우선 깔고, 지금 로그인된 계정 것으로 덮어쓴다.
+    // 다른 계정에서 잡은 항목은 섞이지 않는다.
+    const timelines = { ...(byUser['*'] || {}), ...((myId && byUser[myId]) || {}) };
     return {
       authorization: local.authorization || bg.authorization || null,
       csrf: getCookie('ct0') || local.csrf || bg.csrf || null,
       clientUuid: local.clientUuid || bg.clientUuid || null,
       platform: bg.platform || null,
-      timelines: { ...(bg.timelines || {}) },
+      timelines,
       queryIds: { ...(bg.queryIds || {}), ...local.queryIds },
       tids: { ...(bg.tids || {}), ...local.tids },
       lastTid: local.lastTid || bg.lastTid || null
@@ -324,6 +333,7 @@
       screenName: getMyScreenName(),
       hasTweetsTab: kinds.includes('tweets'),
       hasRepliesTab: kinds.includes('replies'),
+      hasRepostsTab: kinds.includes('reposts'),
       timelines: kinds.map((kind) => ({
         kind,
         label: timelineLabel(kind, session.timelines[kind])
@@ -385,9 +395,9 @@
     return url.toString();
   }
 
-  async function fetchTimeline(ctx, kind, cursor) {
+  async function fetchTimeline(ctx, kind, cursor, count) {
     const entry = ctx.session.timelines[kind];
-    const url = buildTimelineUrl(entry.url, ctx.userId, cursor, 20);
+    const url = buildTimelineUrl(entry.url, ctx.userId, cursor, count);
     const res = await fetch(url, {
       method: 'GET',
       headers: buildHeaders(ctx.session, entry.op),
@@ -494,6 +504,24 @@
     return text.length > 40 ? text.slice(0, 40) + '…' : text || '(본문 없음)';
   }
 
+  /**
+   * entities.user_mentions 는 X 가 "정식 멘션"으로 인식한 것만 담는다.
+   * 앞에 공백 없이 붙이는 등 애매하게 적으면 엔티티가 안 잡혀도 화면엔 "@아이디"가
+   * 그대로 보인다. "멘션만 삭제"가 이런 경우를 놓치지 않도록 본문 텍스트에서도
+   * "@핸들" 패턴을 직접 찾는다(내 계정 자신을 부른 경우는 제외).
+   */
+  const MENTION_RE = /@(\w{1,15})/g;
+  function textMentionsOther(text, myScreenName) {
+    if (!text) return false;
+    const mine = (myScreenName || '').toLowerCase();
+    let m;
+    MENTION_RE.lastIndex = 0;
+    while ((m = MENTION_RE.exec(text))) {
+      if (m[1].toLowerCase() !== mine) return true;
+    }
+    return false;
+  }
+
   // ------------------------------------------------------------ 필터
 
   function classify(node, cfg, ctx) {
@@ -509,8 +537,23 @@
     }
 
     const isRetweet = Boolean(legacy.retweeted_status_result);
+    // kind(게시물/답글 체크박스 대상 구분)는 진짜 답글 필드만 본다. "@아이디"로
+    // 시작하는 글도 X 의 게시물(전체) 탭에서 수집되는 평범한 게시물이라 여기 넣는다.
     const isReply = Boolean(legacy.in_reply_to_status_id_str);
     const kind = isRetweet ? 'retweet' : isReply ? 'reply' : 'tweet';
+
+    // "멘션만 삭제"/"타래 유지" 판정용. kind 와는 별개다.
+    // "@아이디"로 시작하는 글은 진짜 답글이 아니어도 멘션류로 취급해서 이 두
+    // 옵션의 대상이 되게 한다. 문장 중간에 낀 멘션은 여기 해당 안 된다(평범한
+    // 게시물로 그대로 둔다).
+    const leadingMentionMatch = !isRetweet ? fullText(tweet).trim().match(/^@(\w{1,15})/) : null;
+    const leadingMentionHandle = leadingMentionMatch ? leadingMentionMatch[1] : null;
+    const mentionLike = isReply || Boolean(leadingMentionHandle);
+    const repliesToSelf =
+      (isReply && legacy.in_reply_to_user_id_str === ctx.userId) ||
+      (leadingMentionHandle &&
+        ctx.myScreenName &&
+        leadingMentionHandle.toLowerCase() === ctx.myScreenName.toLowerCase());
 
     // ---- 1. 삭제 대상 종류
     if (kind === 'retweet' && !cfg.targets.retweets) {
@@ -541,13 +584,16 @@
 
     // ---- 4. 답글 세분화 (리트윗 제외)
     if (kind !== 'retweet') {
-      if (cfg.keepThreads && isReply && legacy.in_reply_to_user_id_str === ctx.userId) {
+      if (cfg.keepThreads && mentionLike && repliesToSelf) {
         return { action: 'skip', reason: '내 타래 유지', id, kind, tweet };
       }
-      if (cfg.mentionsOnly) {
+      // 멘션만 삭제는 "멘션류"(진짜 답글 + @아이디로 시작하는 글)에만 적용한다.
+      // 문장 중간에 멘션이 섞인 일반 게시글은 이 옵션과 무관하게 게시물 체크로만 처리한다.
+      if (cfg.mentionsOnly && mentionLike) {
         const mentions = legacy.entities?.user_mentions || [];
-        const others = mentions.filter((m) => m.id_str && m.id_str !== ctx.userId);
-        if (others.length === 0) {
+        const hasOtherEntity = mentions.some((m) => m.id_str && m.id_str !== ctx.userId);
+        const hasOtherInText = hasOtherEntity || textMentionsOther(fullText(subject), ctx.myScreenName);
+        if (!hasOtherInText) {
           return { action: 'skip', reason: '타 계정 멘션 없음', id, kind, tweet };
         }
       }
@@ -710,6 +756,8 @@
       excludeIds: parseIds(raw.excludeIds),
       afterDate: raw.afterDate ? new Date(raw.afterDate + 'T00:00:00').getTime() : null,
       beforeDate: raw.beforeDate ? new Date(raw.beforeDate + 'T23:59:59').getTime() : null,
+      // 한 번에 몇 개씩 읽어올지. 너무 크면 X 가 거부하거나 잘라서 줄 수 있어 100 으로 막는다.
+      pageSize: Math.min(100, Math.max(5, num(raw.pageSize) || 40)),
       batchSize: num(raw.batchSize) || 300,
       // 예전 설정(범위 두 칸)이 저장돼 있으면 큰 쪽을 이어받는다.
       cooldownMinutes:
@@ -729,21 +777,26 @@
 
   /**
    * 어떤 타임라인을 순회할지 결정.
-   * 프로필의 "트윗 탭 → 전체(/all)" 과 "답글 탭(/with_replies)" 은 별개 타임라인이라
-   * 각각 따로 완주해야 한다.
+   * 프로필의 "게시물 탭", "답글 탭(/with_replies)", "재게시 탭(/reposts)" 은
+   * 서로 별개 타임라인이라 각각 따로 완주해야 한다. (X 가 재게시를 게시물 탭에서
+   * 분리해 별도 탭으로 뺐다 — 게시물 탭엔 더 이상 리트윗이 안 섞여 나온다.)
    */
   function choosePasses(cfg, session) {
     const have = session.timelines || {};
     const passes = [];
     const missing = [];
 
-    if (cfg.targets.tweets || cfg.targets.retweets) {
+    if (cfg.targets.tweets) {
       if (have.tweets) passes.push('tweets');
-      else missing.push('트윗 탭 → 전체(/all)');
+      else missing.push('게시물 탭');
     }
     if (cfg.targets.replies) {
       if (have.replies) passes.push('replies');
       else missing.push('답글 탭(/with_replies)');
+    }
+    if (cfg.targets.retweets) {
+      if (have.reposts) passes.push('reposts');
+      else missing.push('재게시 탭(/reposts)');
     }
 
     // 필요한 쪽을 하나도 못 잡았으면 잡힌 것으로라도 돈다.
@@ -765,7 +818,7 @@
     while (!state.stopRequested) {
       setPhase('scanning', `${ctx.label(op)} 읽는 중…`);
 
-      const page = await fetchTimeline(ctx, op, cursor);
+      const page = await fetchTimeline(ctx, op, cursor, cfg.pageSize);
 
       if (page.rateLimited) {
         await handleRateLimit(cfg);
@@ -903,7 +956,7 @@
     }
     if (ready.timelines.length === 0) {
       throw new Error(
-        '타임라인 요청을 아직 못 잡았습니다. 프로필 → 트윗 탭 → 전체(/all) 와 프로필 → 답글 탭을 각각 한 번씩 열어주세요.'
+        '타임라인 요청을 아직 못 잡았습니다. 프로필 → 게시물 탭, 답글 탭, 재게시 탭을 각각 한 번씩 열어주세요.'
       );
     }
 
@@ -911,6 +964,7 @@
 
     const ctx = {
       userId: getMyUserId(),
+      myScreenName: ready.screenName || null,
       session,
       referrer: ready.screenName
         ? `https://x.com/${ready.screenName}/with_replies`

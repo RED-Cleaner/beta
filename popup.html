@@ -21,8 +21,9 @@
 
     <div id="notice" class="notice hidden"></div>
     <div id="tabs-row" class="tabs-row hidden">
-      <button id="open-all" class="mini">전체 트윗 열기</button>
+      <button id="open-all" class="mini">게시물 탭 열기</button>
       <button id="open-replies" class="mini">답글 탭 열기</button>
+      <button id="open-reposts" class="mini">재게시 탭 열기</button>
     </div>
 
     <div id="captured" class="captured">
@@ -58,7 +59,7 @@
           <input type="checkbox" id="mentionsOnly" />
           <span>
             <b>멘션만 삭제</b>
-            <small>답글·트윗 중 다른 계정을 언급한 것만 삭제합니다.</small>
+            <small>답글(답글 · "@아이디"로 시작하는 글) 중 다른 계정을 언급한 것만 삭제합니다.</small>
           </span>
         </label>
         <label class="line">
@@ -129,6 +130,10 @@
       <section class="card">
         <h2>속도 조정 · 리밋 회피</h2>
         <small class="hint">리밋 방지를 위해 작은 숫자로 변경하는 것을 권고하지 않습니다.</small>
+        <div class="line line-num">
+          <span>한 번에 수집 개수</span>
+          <div class="num"><input type="number" id="pageSize" min="5" max="100" value="40" /><span>개씩 조회</span></div>
+        </div>
         <div class="line line-num">
           <span>배치 크기</span>
           <div class="num"><input type="number" id="batchSize" min="1" value="300" /><span>개마다 휴식</span></div>

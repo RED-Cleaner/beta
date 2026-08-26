@@ -21,6 +21,7 @@ const FIELDS = {
     'excludeIds',
     'afterDate',
     'beforeDate',
+    'pageSize',
     'batchSize',
     'cooldownMinutes',
     'deleteDelayMs',
@@ -56,7 +57,8 @@ const el = {
   stop: $('stop'),
   tabsRow: $('tabs-row'),
   openAll: $('open-all'),
-  openReplies: $('open-replies')
+  openReplies: $('open-replies'),
+  openReposts: $('open-reposts')
 };
 
 let myScreenName = null;
@@ -324,8 +326,10 @@ async function detectTab() {
     el.tabsRow.classList.remove('hidden');
     el.openAll.classList.toggle('done', Boolean(ready.hasTweetsTab));
     el.openReplies.classList.toggle('done', Boolean(ready.hasRepliesTab));
-    el.openAll.textContent = ready.hasTweetsTab ? '전체 트윗 ✓' : '전체 트윗 열기';
+    el.openReposts.classList.toggle('done', Boolean(ready.hasRepostsTab));
+    el.openAll.textContent = ready.hasTweetsTab ? '게시물 탭 ✓' : '게시물 탭 열기';
     el.openReplies.textContent = ready.hasRepliesTab ? '답글 탭 ✓' : '답글 탭 열기';
+    el.openReposts.textContent = ready.hasRepostsTab ? '재게시 탭 ✓' : '재게시 탭 열기';
   }
 
   if (!ready || !ready.loggedIn) {
@@ -344,18 +348,21 @@ async function detectTab() {
     contentReady = false;
     el.ready.textContent = '타임라인 대기';
     el.ready.className = 'badge badge-wait';
-    showNotice('프로필 → 트윗 탭 → "전체", 그리고 프로필 → 답글 탭을 각각 한 번씩 열어주세요.');
+    showNotice('프로필 → 게시물 탭, 답글 탭, 재게시 탭을 각각 한 번씩 열어주세요.');
   } else {
     contentReady = true;
-    const both = ready.hasTweetsTab && ready.hasRepliesTab;
-    el.ready.textContent = both ? '준비 완료' : '일부 준비';
-    el.ready.className = 'badge ' + (both ? 'badge-ok' : 'badge-wait');
-    showNotice(
-      both
-        ? ''
-        : `아직 ${ready.hasTweetsTab ? '답글 탭' : '트윗 탭 → 전체'} 을(를) 못 잡았습니다. ` +
-            '활성화된 탭만 삭제가 진행됩니다.'
-    );
+    const all = ready.hasTweetsTab && ready.hasRepliesTab && ready.hasRepostsTab;
+    el.ready.textContent = all ? '준비 완료' : '일부 준비';
+    el.ready.className = 'badge ' + (all ? 'badge-ok' : 'badge-wait');
+    if (all) {
+      showNotice('');
+    } else {
+      const missing = [];
+      if (!ready.hasTweetsTab) missing.push('게시물 탭');
+      if (!ready.hasRepliesTab) missing.push('답글 탭');
+      if (!ready.hasRepostsTab) missing.push('재게시 탭');
+      showNotice(`아직 ${missing.join(', ')} 을(를) 못 잡았습니다. 활성화된 탭만 삭제가 진행됩니다.`);
+    }
     el.captured.textContent = '잡은 타임라인: ' + ready.timelines.map((t) => t.label).join(', ');
     $('captured').classList.remove('hidden');
   }
@@ -432,8 +439,9 @@ function goTo(suffix) {
   window.close();
 }
 
-el.openAll.addEventListener('click', () => goTo('/all'));
+el.openAll.addEventListener('click', () => goTo(''));
 el.openReplies.addEventListener('click', () => goTo('/with_replies'));
+el.openReposts.addEventListener('click', () => goTo('/reposts'));
 
 for (const id of [...FIELDS.checkbox, ...FIELDS.value]) {
   $(id).addEventListener('change', saveConfig);

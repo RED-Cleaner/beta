@@ -1,16 +1,5 @@
 /**
  * RED Cleaner - background service worker
- *
- * 두 경로로 X 의 GraphQL 요청 정보를 모은다.
- *  1) content.js 가 MAIN world 후킹으로 잡아 전달 (source: 'page') — 주 수단
- *  2) webRequest 로 관찰 (source: 'webrequest') — 보조
- *
- * 타임라인은 오퍼레이션 이름이 아니라 "어느 탭에서 나온 요청인가"(kind)로 보관한다.
- * X 가 /all 과 /with_replies 에 같은 오퍼레이션 이름을 쓰는 경우가 있어서,
- * 이름을 키로 쓰면 한쪽이 다른 쪽을 덮어써 버린다.
- *
- * storage.local 에 저장한다. storage.session 은 확장을 새로고침(↻)할 때
- * 통째로 날아가서 "아까는 잡았는데 지금은 없다"가 된다.
  */
 
 importScripts('update.js');
@@ -24,14 +13,13 @@ const FALLBACK_QUERY_IDS = {
   DeleteRetweet: 'ZyZigVsNiFO6v1dEks1eWg'
 };
 
-// 이름은 X 가 언제든 바꾸므로 보조 판정용일 뿐이다.
-// 주 판정은 content.js 가 응답 구조를 보고 넘겨주는 isTimeline 플래그다.
 const TIMELINE_OP_RE = /^User(Tweets|TweetsAndReplies|ArticlesTweets)$/;
 
 /** 캡처 경로로 어느 탭인지 구분한다. 경로를 모르면 오퍼레이션 이름으로 추정. */
 function kindOf(path, operation) {
   if (path) {
     if (/\/with_replies\/?$/.test(path)) return 'replies';
+    if (/\/reposts\/?$/.test(path)) return 'reposts';
     if (/\/(media|highlights|likes)\/?$/.test(path)) return null; // 쓰지 않는 탭
     return 'tweets'; // 프로필 루트 또는 /all
   }
@@ -45,8 +33,7 @@ function emptyCapture() {
     authorization: null,
     clientUuid: null,
     platform: null,
-    // { tweets: {...}, replies: {...} } — 값은 { op, queryId, url, path, source, at }
-    timelines: {},
+    timelinesByUser: {},
     queryIds: { ...FALLBACK_QUERY_IDS },
     queryIdSource: {}, // { OperationName: 'observed' | 'bundle' }
     tids: {}, // { OperationName: x-client-transaction-id }
@@ -67,14 +54,17 @@ async function load() {
       captured = {
         ...emptyCapture(),
         ...saved,
-        timelines: { ...(saved.timelines || {}) },
+        timelinesByUser: { ...(saved.timelinesByUser || {}) },
         queryIds: { ...FALLBACK_QUERY_IDS, ...(saved.queryIds || {}) },
         queryIdSource: { ...(saved.queryIdSource || {}) },
         tids: { ...(saved.tids || {}) }
       };
-      // 예전 버전은 오퍼레이션 이름을 키로 썼다. 형식이 다르면 버린다.
-      for (const key of Object.keys(captured.timelines)) {
-        if (key !== 'tweets' && key !== 'replies') delete captured.timelines[key];
+      delete captured.timelines;
+      // 형식이 다르면 버린다.
+      for (const bucket of Object.values(captured.timelinesByUser)) {
+        for (const key of Object.keys(bucket)) {
+          if (key !== 'tweets' && key !== 'replies' && key !== 'reposts') delete bucket[key];
+        }
       }
     }
   } catch (e) {
@@ -99,8 +89,9 @@ function parseGraphql(url) {
 /**
  * 한 건의 관찰 결과를 반영. 바뀐 게 있으면 true.
  * @param {'page'|'webrequest'} source
+ * @param {string|null} userId 캡처 당시 로그인된 계정. 모르면 null('*' 버킷에 보관)
  */
-function absorb(url, operation, queryId, headers, path, source, isTimeline) {
+function absorb(url, operation, queryId, headers, path, source, isTimeline, userId) {
   let dirty = false;
 
   if (operation && queryId && captured.queryIds[operation] !== queryId) {
@@ -115,29 +106,27 @@ function absorb(url, operation, queryId, headers, path, source, isTimeline) {
   if (timelineish && url) {
     const kind = kindOf(path, operation);
     if (kind) {
-      const prev = captured.timelines[kind];
+      const bucketKey = userId || '*';
+      if (!captured.timelinesByUser[bucketKey]) captured.timelinesByUser[bucketKey] = {};
+      const bucket = captured.timelinesByUser[bucketKey];
+      const prev = bucket[kind];
       const next = {
         op: operation,
         queryId,
         url,
         path: path || (prev && prev.path) || null,
         source,
+        userId: userId || null,
         // 응답 구조로 확인된 진짜 타임라인인지
         confirmed: Boolean(isTimeline),
         at: Date.now()
       };
 
-      // 더 나은 캡처만 받아들인다. 점수가 높을수록 신뢰도가 높다.
-      //  - 응답으로 확인된 것 > 이름만 맞는 것
-      //  - 페이지 후킹(요청 시점 경로를 앎) > webRequest(SPA 라 경로가 낡음)
-      //  - "/all" 에서 잡은 것 > 프로필 루트에서 잡은 것
-      const score = (e) =>
-        (e.confirmed ? 4 : 0) +
-        (e.source === 'page' ? 2 : 0) +
-        (/\/all\/?$/.test(e.path || '') ? 1 : 0);
+      // 밀려날 수 있다.
+      const score = (e) => (e.confirmed ? 4 : 0) + (e.source === 'page' ? 2 : 0);
 
       if (!prev || score(next) > score(prev) || (score(next) === score(prev) && prev.url !== url)) {
-        captured.timelines[kind] = next;
+        bucket[kind] = next;
         captured.capturedAt = Date.now();
         dirty = true;
       }
@@ -272,7 +261,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   if (message.type === 'rc-capture') {
     load().then(() => {
       const c = message.data || {};
-      if (absorb(c.url, c.op, c.queryId, c.headers, c.path, 'page', c.isTimeline)) persist();
+      if (absorb(c.url, c.op, c.queryId, c.headers, c.path, 'page', c.isTimeline, c.userId)) persist();
       sendResponse({ ok: true });
     });
     return true;
@@ -285,7 +274,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
 
   if (message.type === 'rc-forget-timelines') {
     load().then(() => {
-      captured.timelines = {};
+      captured.timelinesByUser = {};
       persist();
       sendResponse({ ok: true });
     });
