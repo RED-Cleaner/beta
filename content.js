@@ -15,6 +15,8 @@
     const path = (entry && entry.path) || '';
     if (kind === 'replies') return path ? `답글(${path})` : '답글';
     if (kind === 'reposts') return path ? `재게시(${path})` : '재게시';
+    if (kind === 'media') return path ? `미디어-영상(${path})` : '미디어-영상';
+    if (kind === 'mediaPhoto') return path ? `미디어-사진(${path})` : '미디어-사진';
     return path ? `게시물(${path})` : '게시물';
   }
 
@@ -334,6 +336,8 @@
       hasTweetsTab: kinds.includes('tweets'),
       hasRepliesTab: kinds.includes('replies'),
       hasRepostsTab: kinds.includes('reposts'),
+      hasMediaVideoTab: kinds.includes('media'),
+      hasMediaPhotoTab: kinds.includes('mediaPhoto'),
       timelines: kinds.map((kind) => ({
         kind,
         label: timelineLabel(kind, session.timelines[kind])
@@ -524,7 +528,7 @@
 
   // ------------------------------------------------------------ 필터
 
-  function classify(node, cfg, ctx) {
+  function classify(node, cfg, ctx, pass) {
     const tweet = node.tweet;
     const legacy = tweet.legacy || {};
     const id = tweet.rest_id || legacy.id_str;
@@ -556,14 +560,17 @@
         leadingMentionHandle.toLowerCase() === ctx.myScreenName.toLowerCase());
 
     // ---- 1. 삭제 대상 종류
-    if (kind === 'retweet' && !cfg.targets.retweets) {
-      return { action: 'skip', reason: '대상 아님(리트윗)', id, kind, silent: true };
-    }
-    if (kind === 'reply' && !cfg.targets.replies) {
-      return { action: 'skip', reason: '대상 아님(답글)', id, kind, silent: true };
-    }
-    if (kind === 'tweet' && !cfg.targets.tweets) {
-      return { action: 'skip', reason: '대상 아님(퍼블트)', id, kind, silent: true };
+    // 미디어 탭은 종류(게시물/답글/리트윗)와 무관하게 그 탭에 나온 건 전부 대상으로 본다.
+    if (pass !== 'media' && pass !== 'mediaPhoto') {
+      if (kind === 'retweet' && !cfg.targets.retweets) {
+        return { action: 'skip', reason: '대상 아님(리트윗)', id, kind, silent: true };
+      }
+      if (kind === 'reply' && !cfg.targets.replies) {
+        return { action: 'skip', reason: '대상 아님(답글)', id, kind, silent: true };
+      }
+      if (kind === 'tweet' && !cfg.targets.tweets) {
+        return { action: 'skip', reason: '대상 아님(퍼블트)', id, kind, silent: true };
+      }
     }
 
     // ---- 2. 지정 트윗 제외
@@ -582,7 +589,22 @@
     const subject = inner || tweet;
     const subjectLegacy = subject.legacy || {};
 
-    // ---- 4. 답글 세분화 (리트윗 제외)
+    // ---- 4. 미디어 탭 세부 종류 (영상/사진)
+    // X 의 /media 탭(필터 없음)은 영상뿐 아니라 사진도 같이 섞여 나온다. 탭(패스) 선택만으로는
+    // 종류를 가를 수 없으므로, 실제 첨부 미디어 타입을 봐서 영상 탭엔 영상/움짤만, 사진 탭엔
+    // 사진만 남긴다.
+    if (pass === 'media' || pass === 'mediaPhoto') {
+      const media = mediaList(subject);
+      const hasVideo = media.some((m) => m.type === 'video' || m.type === 'animated_gif');
+      if (pass === 'media' && !hasVideo) {
+        return { action: 'skip', reason: '대상 아님(사진 - 미디어-영상 탭 전용)', id, kind, silent: true };
+      }
+      if (pass === 'mediaPhoto' && hasVideo) {
+        return { action: 'skip', reason: '대상 아님(영상 - 미디어-사진 탭 전용)', id, kind, silent: true };
+      }
+    }
+
+    // ---- 5. 답글 세분화 (리트윗 제외)
     if (kind !== 'retweet') {
       if (cfg.keepThreads && mentionLike && repliesToSelf) {
         return { action: 'skip', reason: '내 타래 유지', id, kind, tweet };
@@ -599,7 +621,7 @@
       }
     }
 
-    // ---- 5. 제외 조건
+    // ---- 6. 제외 조건
     if (cfg.keepMedia && mediaList(subject).length > 0) {
       return { action: 'skip', reason: '미디어 첨부 제외', id, kind, tweet };
     }
@@ -618,7 +640,7 @@
       if (hit) return { action: 'skip', reason: `키워드 제외(${hit})`, id, kind, tweet };
     }
 
-    // ---- 6. 기간
+    // ---- 7. 기간
     if (cfg.afterDate || cfg.beforeDate) {
       const created = legacy.created_at ? new Date(legacy.created_at).getTime() : null;
       if (created !== null) {
@@ -740,7 +762,9 @@
       targets: {
         tweets: Boolean(raw.targets?.tweets),
         replies: Boolean(raw.targets?.replies),
-        retweets: Boolean(raw.targets?.retweets)
+        retweets: Boolean(raw.targets?.retweets),
+        mediaVideo: Boolean(raw.targets?.mediaVideo),
+        mediaPhoto: Boolean(raw.targets?.mediaPhoto)
       },
       mentionsOnly: Boolean(raw.mentionsOnly),
       keepThreads: Boolean(raw.keepThreads),
@@ -798,6 +822,14 @@
       if (have.reposts) passes.push('reposts');
       else missing.push('재게시 탭(/reposts)');
     }
+    if (cfg.targets.mediaVideo) {
+      if (have.media) passes.push('media');
+      else missing.push('미디어-영상 탭(/media)');
+    }
+    if (cfg.targets.mediaPhoto) {
+      if (have.mediaPhoto) passes.push('mediaPhoto');
+      else missing.push('미디어-사진 탭(/media?filter=photo)');
+    }
 
     // 필요한 쪽을 하나도 못 잡았으면 잡힌 것으로라도 돈다.
     const all = Object.keys(have);
@@ -840,7 +872,7 @@
 
       const decisions = [];
       for (const node of fresh) {
-        const d = classify(node, cfg, ctx);
+        const d = classify(node, cfg, ctx, op);
         if (d.action === 'skip') {
           if (!d.silent) {
             state.skipped += 1;
@@ -942,7 +974,13 @@
   async function run(rawConfig) {
     const cfg = normalizeConfig(rawConfig);
 
-    if (!cfg.targets.tweets && !cfg.targets.replies && !cfg.targets.retweets) {
+    if (
+      !cfg.targets.tweets &&
+      !cfg.targets.replies &&
+      !cfg.targets.retweets &&
+      !cfg.targets.mediaVideo &&
+      !cfg.targets.mediaPhoto
+    ) {
       throw new Error('삭제 대상을 최소 하나 선택하세요.');
     }
 
@@ -956,7 +994,7 @@
     }
     if (ready.timelines.length === 0) {
       throw new Error(
-        '타임라인 요청을 아직 못 잡았습니다. 프로필 → 게시물 탭, 답글 탭, 재게시 탭을 각각 한 번씩 열어주세요.'
+        '타임라인 요청을 아직 못 잡았습니다. 프로필 → 게시물 탭, 답글 탭, 재게시 탭(필요하면 미디어-영상/미디어-사진 탭도)을 각각 한 번씩 열어주세요.'
       );
     }
 
@@ -995,7 +1033,9 @@
     const targetNames = [
       cfg.targets.tweets && '퍼블트',
       cfg.targets.replies && '답글',
-      cfg.targets.retweets && '리트윗'
+      cfg.targets.retweets && '리트윗',
+      cfg.targets.mediaVideo && '미디어-영상',
+      cfg.targets.mediaPhoto && '미디어-사진'
     ].filter(Boolean);
 
     log(`정리 시작 — 대상: ${targetNames.join(', ')}${cfg.dryRun ? ' (미리보기)' : ''}`, 'start');

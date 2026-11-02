@@ -15,16 +15,28 @@ const FALLBACK_QUERY_IDS = {
 
 const TIMELINE_OP_RE = /^User(Tweets|TweetsAndReplies|ArticlesTweets)$/;
 
-/** 캡처 경로로 어느 탭인지 구분한다. 경로를 모르면 오퍼레이션 이름으로 추정. */
+/**
+ * 캡처 경로로 어느 탭인지 구분한다. 경로를 모르면 오퍼레이션 이름으로 추정.
+ * path 는 "pathname + search" 형태(예: "/user/media?filter=photo"). 미디어 탭은
+ * ?filter=photo 유무로 영상 전용 목록과 사진 전용 목록이 나뉘므로 쿼리까지 봐야 한다.
+ */
 function kindOf(path, operation) {
   if (path) {
-    if (/\/with_replies\/?$/.test(path)) return 'replies';
-    if (/\/reposts\/?$/.test(path)) return 'reposts';
-    if (/\/(media|highlights|likes)\/?$/.test(path)) return null; // 쓰지 않는 탭
+    const qIdx = path.indexOf('?');
+    const pathname = qIdx === -1 ? path : path.slice(0, qIdx);
+    const search = qIdx === -1 ? '' : path.slice(qIdx + 1);
+
+    if (/\/with_replies\/?$/.test(pathname)) return 'replies';
+    if (/\/reposts\/?$/.test(pathname)) return 'reposts';
+    if (/\/media\/?$/.test(pathname)) {
+      return /(?:^|&)filter=photo(?:&|$)/.test(search) ? 'mediaPhoto' : 'media';
+    }
+    if (/\/(highlights|likes)\/?$/.test(pathname)) return null; // 쓰지 않는 탭
     return 'tweets'; // 프로필 루트 또는 /all
   }
   if (operation === 'UserTweetsAndReplies') return 'replies';
   if (operation === 'UserTweets') return 'tweets';
+  if (operation === 'UserMedia') return 'media';
   return null;
 }
 
@@ -63,7 +75,14 @@ async function load() {
       // 형식이 다르면 버린다.
       for (const bucket of Object.values(captured.timelinesByUser)) {
         for (const key of Object.keys(bucket)) {
-          if (key !== 'tweets' && key !== 'replies' && key !== 'reposts') delete bucket[key];
+          if (
+            key !== 'tweets' &&
+            key !== 'replies' &&
+            key !== 'reposts' &&
+            key !== 'media' &&
+            key !== 'mediaPhoto'
+          )
+            delete bucket[key];
         }
       }
     }
@@ -178,7 +197,10 @@ chrome.webRequest.onBeforeSendHeaders.addListener(
 
     let path = null;
     try {
-      if (details.documentUrl) path = new URL(details.documentUrl).pathname;
+      if (details.documentUrl) {
+        const u = new URL(details.documentUrl);
+        path = u.pathname + u.search;
+      }
     } catch (e) {
       /* noop */
     }

@@ -5,6 +5,8 @@ const FIELDS = {
     't-tweets',
     't-replies',
     't-retweets',
+    't-media-video',
+    't-media-photo',
     'mentionsOnly',
     'keepThreads',
     'keepPinned',
@@ -58,7 +60,9 @@ const el = {
   tabsRow: $('tabs-row'),
   openAll: $('open-all'),
   openReplies: $('open-replies'),
-  openReposts: $('open-reposts')
+  openReposts: $('open-reposts'),
+  openMediaVideo: $('open-media-video'),
+  openMediaPhoto: $('open-media-photo')
 };
 
 let myScreenName = null;
@@ -73,7 +77,9 @@ function readConfig() {
     targets: {
       tweets: $('t-tweets').checked,
       replies: $('t-replies').checked,
-      retweets: $('t-retweets').checked
+      retweets: $('t-retweets').checked,
+      mediaVideo: $('t-media-video').checked,
+      mediaPhoto: $('t-media-photo').checked
     }
   };
   for (const id of FIELDS.checkbox) {
@@ -90,6 +96,8 @@ function applyConfig(cfg) {
     $('t-tweets').checked = !!cfg.targets.tweets;
     $('t-replies').checked = !!cfg.targets.replies;
     $('t-retweets').checked = !!cfg.targets.retweets;
+    $('t-media-video').checked = !!cfg.targets.mediaVideo;
+    $('t-media-photo').checked = !!cfg.targets.mediaPhoto;
   }
   for (const id of FIELDS.checkbox) {
     if (id.startsWith('t-')) continue;
@@ -327,9 +335,13 @@ async function detectTab() {
     el.openAll.classList.toggle('done', Boolean(ready.hasTweetsTab));
     el.openReplies.classList.toggle('done', Boolean(ready.hasRepliesTab));
     el.openReposts.classList.toggle('done', Boolean(ready.hasRepostsTab));
+    el.openMediaVideo.classList.toggle('done', Boolean(ready.hasMediaVideoTab));
+    el.openMediaPhoto.classList.toggle('done', Boolean(ready.hasMediaPhotoTab));
     el.openAll.textContent = ready.hasTweetsTab ? '게시물 탭 ✓' : '게시물 탭 열기';
     el.openReplies.textContent = ready.hasRepliesTab ? '답글 탭 ✓' : '답글 탭 열기';
     el.openReposts.textContent = ready.hasRepostsTab ? '재게시 탭 ✓' : '재게시 탭 열기';
+    el.openMediaVideo.textContent = ready.hasMediaVideoTab ? '미디어-영상 탭 ✓' : '미디어-영상 탭 열기';
+    el.openMediaPhoto.textContent = ready.hasMediaPhotoTab ? '미디어-사진 탭 ✓' : '미디어-사진 탭 열기';
   }
 
   if (!ready || !ready.loggedIn) {
@@ -351,7 +363,12 @@ async function detectTab() {
     showNotice('프로필 → 게시물 탭, 답글 탭, 재게시 탭을 각각 한 번씩 열어주세요.');
   } else {
     contentReady = true;
-    const all = ready.hasTweetsTab && ready.hasRepliesTab && ready.hasRepostsTab;
+    const all =
+      ready.hasTweetsTab &&
+      ready.hasRepliesTab &&
+      ready.hasRepostsTab &&
+      ready.hasMediaVideoTab &&
+      ready.hasMediaPhotoTab;
     el.ready.textContent = all ? '준비 완료' : '일부 준비';
     el.ready.className = 'badge ' + (all ? 'badge-ok' : 'badge-wait');
     if (all) {
@@ -361,6 +378,8 @@ async function detectTab() {
       if (!ready.hasTweetsTab) missing.push('게시물 탭');
       if (!ready.hasRepliesTab) missing.push('답글 탭');
       if (!ready.hasRepostsTab) missing.push('재게시 탭');
+      if (!ready.hasMediaVideoTab) missing.push('미디어-영상 탭');
+      if (!ready.hasMediaPhotoTab) missing.push('미디어-사진 탭');
       showNotice(`아직 ${missing.join(', ')} 을(를) 못 잡았습니다. 활성화된 탭만 삭제가 진행됩니다.`);
     }
     el.captured.textContent = '잡은 타임라인: ' + ready.timelines.map((t) => t.label).join(', ');
@@ -386,8 +405,14 @@ async function poll() {
 
 el.start.addEventListener('click', async () => {
   const cfg = readConfig();
-  if (!cfg.targets.tweets && !cfg.targets.replies && !cfg.targets.retweets) {
-    showNotice('삭제 대상(트윗(퍼블트) / 답글 / 리트윗)을 최소 하나 선택하세요.');
+  if (
+    !cfg.targets.tweets &&
+    !cfg.targets.replies &&
+    !cfg.targets.retweets &&
+    !cfg.targets.mediaVideo &&
+    !cfg.targets.mediaPhoto
+  ) {
+    showNotice('삭제 대상(트윗(퍼블트) / 답글 / 리트윗 / 미디어-영상 / 미디어-사진)을 최소 하나 선택하세요.');
     return;
   }
 
@@ -395,7 +420,9 @@ el.start.addEventListener('click', async () => {
     const targets = [
       cfg.targets.tweets && '트윗(퍼블트)',
       cfg.targets.replies && '답글',
-      cfg.targets.retweets && '리트윗'
+      cfg.targets.retweets && '리트윗',
+      cfg.targets.mediaVideo && '미디어-영상',
+      cfg.targets.mediaPhoto && '미디어-사진'
     ]
       .filter(Boolean)
       .join(', ');
@@ -442,6 +469,8 @@ function goTo(suffix) {
 el.openAll.addEventListener('click', () => goTo(''));
 el.openReplies.addEventListener('click', () => goTo('/with_replies'));
 el.openReposts.addEventListener('click', () => goTo('/reposts'));
+el.openMediaVideo.addEventListener('click', () => goTo('/media'));
+el.openMediaPhoto.addEventListener('click', () => goTo('/media?filter=photo'));
 
 for (const id of [...FIELDS.checkbox, ...FIELDS.value]) {
   $(id).addEventListener('change', saveConfig);

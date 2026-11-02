@@ -59,7 +59,7 @@
           url: String(url),
           op: info.op,
           queryId: info.queryId,
-          path: location.pathname, // 어느 프로필 탭에서 나온 요청인지
+          path: location.pathname + location.search, // 어느 프로필 탭(필터 포함)에서 나온 요청인지
           isTimeline: Boolean(isTimeline),
           headers
         },
